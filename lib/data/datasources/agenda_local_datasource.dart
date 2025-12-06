@@ -12,6 +12,13 @@ class AgendaSlot {
   AgendaSlot({required this.inicio, required this.fin});
 }
 
+/// Helper para estados del día
+enum DayStatus {
+  unavailable, // Grey (Not working day)
+  full,        // Red (Working but no slots)
+  available,   // Green (Working and slots > 0)
+}
+
 /// Fuente local que maneja citas + generación de slots
 class AgendaLocalDataSource {
   AgendaLocalDataSource._internal();
@@ -126,13 +133,13 @@ class AgendaLocalDataSource {
       }
 
       if (!isPast) {
-         // Verificar si está ocupado
+         // Verificar si está ocupado (incluyendo 'blocked' y 'pending_invite')
         final ocupado = _citas.any(
           (c) =>
               c.professional.id == doctorId &&
+              c.status != 'cancelada' &&
               cursor.isBefore(c.dateTime.add(c.duration)) &&
-              c.dateTime.isBefore(slotFin) &&
-              c.status != 'cancelada',
+              c.dateTime.isBefore(slotFin)
         );
 
         if (!ocupado) {
@@ -144,6 +151,59 @@ class AgendaLocalDataSource {
     }
 
     return slots;
+  }
+
+  /// ============================================================
+  ///   OBTENER DISPONIBILIDAD MENSUAL
+  /// ============================================================
+  Future<Map<DateTime, DayStatus>> getAvailabilityForMonth({
+    required String doctorId,
+    required DateTime month
+  }) async {
+    final config = await cargarConfigMedico(doctorId);
+    final diasLaborales = (config["diasLaborales"] as List<dynamic>?)
+        ?.map((e) => e as int)
+        .toList() ?? [1, 2, 3, 4, 5];
+
+    // Calcular inicio y fin del mes
+    // Para simplificar, iteramos del día 1 al 31 (o fin de mes real)
+    final daysInMonth = DateUtils.getDaysInMonth(month.year, month.month);
+
+    Map<DateTime, DayStatus> availability = {};
+
+    for (int i = 1; i <= daysInMonth; i++) {
+      final date = DateTime(month.year, month.month, i);
+
+      // 1. Check if working day
+      if (!diasLaborales.contains(date.weekday)) {
+        availability[date] = DayStatus.unavailable;
+        continue;
+      }
+
+      // 2. Check slots
+      // NOTE: Calling generarSlots for 30 days might be heavy if not optimized,
+      // but for local calc it's fine.
+      // We also skip checking past days if strictly needed, but showing history is okay.
+      // Let's mark past days as unavailable for booking purposes?
+      // User requirement: "Red dot" for fully booked. "Grey" for unavailable/rest.
+      // Past days should probably be grey or just ignored. Let's stick to status logic.
+
+      final slots = await generarSlots(doctorId: doctorId, fecha: date);
+
+      if (slots.isEmpty) {
+        // Working day but no slots -> FULL (or fully blocked)
+        // If it's a working day but past, generarSlots returns empty if strict time checking is on.
+        // Actually generarSlots filters past hours.
+        // If the whole day is in the past, slots will be empty.
+        // Let's assume for calendar view, we want to see what happened or if it was full.
+        // But for future booking, empty means full.
+        availability[date] = DayStatus.full;
+      } else {
+        availability[date] = DayStatus.available;
+      }
+    }
+
+    return availability;
   }
 
   /// Helper para convertir "HH:mm" → DateTime
@@ -159,25 +219,43 @@ class AgendaLocalDataSource {
   }
 
   /// ============================================================
-  ///   AGENDAR CITA
+  ///   AGENDAR CITA (o BLOQUEO / INVITE)
   /// ============================================================
   Future<Appointment> agendarCita({
     required Professional professional,
     required DateTime fechaHora,
     required Duration duracion,
+    String status = "confirmada",
+    String? patientId,
   }) async {
     final cita = Appointment(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       professional: professional,
       dateTime: fechaHora,
       duration: duracion,
-      status: "confirmada",
+      status: status,
+      patientId: patientId,
     );
 
     _citas.add(cita);
     await _guardarCitas();
 
     return cita;
+  }
+
+  // Method specifically for doctor blocking
+  Future<void> bloquearSlot({
+     required Professional professional,
+     required DateTime fechaHora,
+     required Duration duracion,
+  }) async {
+    await agendarCita(
+      professional: professional,
+      fechaHora: fechaHora,
+      duracion: duracion,
+      status: "blocked",
+      patientId: "DOCTOR", // Reserved by doctor
+    );
   }
 
   /// ============================================================
