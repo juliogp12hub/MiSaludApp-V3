@@ -40,4 +40,22 @@ class AgendaRepository {
   }) async {
     await _local.reagendarCita(id, nuevaFecha);
   }
+
+  /// Generar slots disponibles
+  Future<List<AgendaSlot>> generarSlots({
+    required String doctorId,
+    required DateTime fecha,
+  }) {
+    return _local.generarSlots(doctorId: doctorId, fecha: fecha);
+  }
+
+  /// Cargar configuración del médico
+  Future<Map<String, dynamic>> cargarConfigMedico(String doctorId) {
+    return _local.cargarConfigMedico(doctorId);
+  }
+
+  /// Guardar configuración del médico
+  Future<void> guardarConfigMedico(String doctorId, Map<String, dynamic> config) {
+    return _local.guardarConfigMedico(doctorId, config);
+  }
 }

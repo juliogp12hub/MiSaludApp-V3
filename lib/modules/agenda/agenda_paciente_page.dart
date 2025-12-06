@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
-import '../../services/agenda_service_mock.dart';
+import '../../data/repositories/agenda_repository.dart';
+import '../../data/datasources/agenda_local_datasource.dart';
 import '../../core/models/professional.dart';
+import '../../services/notification_service.dart';
 
 class AgendaPacientePage extends StatefulWidget {
   final Professional professional;
@@ -12,38 +14,32 @@ class AgendaPacientePage extends StatefulWidget {
 }
 
 class _AgendaPacientePageState extends State<AgendaPacientePage> {
-  final AgendaServiceMock _agenda = AgendaServiceMock();
+  final AgendaRepository _repo = AgendaRepository();
+  final NotificationService _notificationService = NotificationService();
 
   DateTime? _fechaSeleccionada;
   String? _modalidadSeleccionada;
-  TimeOfDay? _horaSeleccionada;
+  DateTime? _slotSeleccionado; // Inicio del slot seleccionado
 
   bool _isSaving = false;
+  bool _isLoadingSlots = false;
+  List<AgendaSlot> _slotsDisponibles = [];
+  Map<String, dynamic>? _doctorConfig;
 
-  // -------------------------------------------------------------
-  // GENERACIÓN DE HORARIOS DISPONIBLES AUTOMÁTICOS
-  // -------------------------------------------------------------
-  List<TimeOfDay> _generarHorarios(Professional d) {
-    final List<TimeOfDay> lista = [];
+  @override
+  void initState() {
+    super.initState();
+    _repo.init();
+    _cargarConfiguracion();
+  }
 
-    void agregarRango(int inicio, int fin) {
-      for (int h = inicio; h < fin; h++) {
-        lista.add(TimeOfDay(hour: h, minute: 0));
-        lista.add(TimeOfDay(hour: h, minute: 30));
-      }
+  Future<void> _cargarConfiguracion() async {
+    final config = await _repo.cargarConfigMedico(widget.professional.id);
+    if (mounted) {
+      setState(() {
+        _doctorConfig = config;
+      });
     }
-
-    if (d.schedules.contains("matutino")) {
-      agregarRango(8, 12);
-    }
-    if (d.schedules.contains("vespertino")) {
-      agregarRango(14, 18);
-    }
-    if (d.schedules.contains("nocturno")) {
-      agregarRango(18, 21);
-    }
-
-    return lista;
   }
 
   Future<void> _seleccionarFecha() async {
@@ -51,95 +47,88 @@ class _AgendaPacientePageState extends State<AgendaPacientePage> {
 
     final picked = await showDatePicker(
       context: context,
-      initialDate: hoy,
+      initialDate: _fechaSeleccionada ?? hoy,
       firstDate: hoy,
       lastDate: hoy.add(const Duration(days: 30)),
     );
 
     if (picked != null) {
-      setState(() => _fechaSeleccionada = picked);
+      setState(() {
+        _fechaSeleccionada = picked;
+        _slotSeleccionado = null; // Reset slot al cambiar fecha
+        _isLoadingSlots = true;
+      });
+      _cargarSlots(picked);
     }
   }
 
-  Future<void> _seleccionarHora() async {
-    if (_modalidadSeleccionada == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Selecciona primero la modalidad.")),
+  Future<void> _cargarSlots(DateTime fecha) async {
+    try {
+      final slots = await _repo.generarSlots(
+        doctorId: widget.professional.id,
+        fecha: fecha,
       );
-      return;
-    }
-
-    if (_fechaSeleccionada == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Selecciona primero la fecha.")),
-      );
-      return;
-    }
-
-    final professional = widget.professional;
-    final horarios = _generarHorarios(professional);
-
-    await showModalBottomSheet(
-      context: context,
-      builder: (_) {
-        return SizedBox(
-          height: 350,
-          child: ListView.builder(
-            itemCount: horarios.length,
-            itemBuilder: (_, i) {
-              final h = horarios[i];
-              return ListTile(
-                leading: const Icon(Icons.access_time),
-                title: Text(
-                  "${h.hour.toString().padLeft(2, '0')}:${h.minute.toString().padLeft(2, '0')}",
-                ),
-                onTap: () {
-                  setState(() => _horaSeleccionada = h);
-                  Navigator.pop(context);
-                },
-              );
-            },
-          ),
+      if (mounted) {
+        setState(() {
+          _slotsDisponibles = slots;
+          _isLoadingSlots = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _slotsDisponibles = [];
+          _isLoadingSlots = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error cargando horarios: $e")),
         );
-      },
-    );
+      }
+    }
   }
 
   Future<void> _confirmarCita() async {
     if (_modalidadSeleccionada == null ||
         _fechaSeleccionada == null ||
-        _horaSeleccionada == null) {
+        _slotSeleccionado == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Completa todos los campos.")),
       );
       return;
     }
 
-    final fecha = DateTime(
-      _fechaSeleccionada!.year,
-      _fechaSeleccionada!.month,
-      _fechaSeleccionada!.day,
-      _horaSeleccionada!.hour,
-      _horaSeleccionada!.minute,
-    );
-
     setState(() => _isSaving = true);
 
-    await _agenda.agendarCita(
-      doctor: widget.professional,
-      fechaHora: fecha,
-      duration: const Duration(minutes: 30),
-    );
+    try {
+      final duracion = Duration(minutes: _doctorConfig?['duracion'] ?? 30);
 
-    setState(() => _isSaving = false);
+      final cita = await _repo.agendarCita(
+        professional: widget.professional,
+        fechaHora: _slotSeleccionado!,
+        duracion: duracion,
+      );
 
-    if (!mounted) return;
+      // Enviar notificaciones (Mock)
+      await _notificationService.sendAppointmentConfirmation(cita);
 
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text("Cita agendada con éxito.")));
+      if (!mounted) return;
 
-    Navigator.pop(context, true);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Cita agendada con éxito.")),
+      );
+
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error al agendar: $e")),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
+    }
   }
 
   @override
@@ -152,18 +141,14 @@ class _AgendaPacientePageState extends State<AgendaPacientePage> {
               "${_fechaSeleccionada!.month.toString().padLeft(2, '0')}/"
               "${_fechaSeleccionada!.year}";
 
-    final horaText = _horaSeleccionada == null
-        ? "Selecciona una hora"
-        : "${_horaSeleccionada!.hour.toString().padLeft(2, '0')}:"
-              "${_horaSeleccionada!.minute.toString().padLeft(2, '0')}";
-
     return Scaffold(
       appBar: AppBar(title: const Text("Agendar cita")),
-      body: Padding(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Header del profesional
             Text(
               d.name,
               style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
@@ -174,7 +159,7 @@ class _AgendaPacientePageState extends State<AgendaPacientePage> {
             ),
             const SizedBox(height: 12),
 
-            // Modalidad (presencial/virtual)
+            // Modalidad
             const Text(
               "Modalidad",
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
@@ -205,27 +190,48 @@ class _AgendaPacientePageState extends State<AgendaPacientePage> {
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
             ),
             ListTile(
-              leading: const Icon(Icons.calendar_today),
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.calendar_today, color: Colors.blue),
               title: Text(fechaText),
               onTap: _seleccionarFecha,
             ),
 
-            // Hora
+            const SizedBox(height: 24),
+
+            // Horarios (Grid dinámico)
             const Text(
-              "Hora",
+              "Horarios Disponibles",
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
             ),
-            ListTile(
-              leading: const Icon(Icons.access_time),
-              title: Text(horaText),
-              onTap: _seleccionarHora,
-            ),
+            const SizedBox(height: 8),
+            if (_fechaSeleccionada == null)
+              const Text("Por favor selecciona una fecha primero.", style: TextStyle(color: Colors.grey))
+            else if (_isLoadingSlots)
+              const Center(child: Padding(
+                padding: EdgeInsets.all(20.0),
+                child: CircularProgressIndicator(),
+              ))
+            else if (_slotsDisponibles.isEmpty)
+              Container(
+                 padding: const EdgeInsets.all(16),
+                 decoration: BoxDecoration(
+                   color: Colors.grey[100],
+                   borderRadius: BorderRadius.circular(8)
+                 ),
+                 child: const Text("No hay horarios disponibles para esta fecha. Intenta otro día."),
+              )
+            else
+              _buildSlotsGrid(),
 
-            const Spacer(),
+            const SizedBox(height: 40),
 
+            // Botón Confirmar
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                ),
                 icon: _isSaving
                     ? const SizedBox(
                         height: 18,
@@ -236,13 +242,44 @@ class _AgendaPacientePageState extends State<AgendaPacientePage> {
                         ),
                       )
                     : const Icon(Icons.check),
-                label: Text(_isSaving ? "Guardando..." : "Confirmar cita"),
+                label: Text(
+                  _isSaving ? "Guardando..." : "Confirmar cita",
+                  style: const TextStyle(fontSize: 18),
+                ),
                 onPressed: _isSaving ? null : _confirmarCita,
               ),
             ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildSlotsGrid() {
+    return Wrap(
+      spacing: 12,
+      runSpacing: 12,
+      children: _slotsDisponibles.map((slot) {
+        final isSelected = _slotSeleccionado == slot.inicio;
+
+        // Formato HH:mm
+        final hourStr = "${slot.inicio.hour.toString().padLeft(2, '0')}:${slot.inicio.minute.toString().padLeft(2, '0')}";
+
+        return ChoiceChip(
+          label: Text(hourStr),
+          selected: isSelected,
+          onSelected: (selected) {
+            setState(() {
+              _slotSeleccionado = selected ? slot.inicio : null;
+            });
+          },
+          selectedColor: Colors.blue,
+          labelStyle: TextStyle(
+            color: isSelected ? Colors.white : Colors.black,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+          ),
+        );
+      }).toList(),
     );
   }
 }
