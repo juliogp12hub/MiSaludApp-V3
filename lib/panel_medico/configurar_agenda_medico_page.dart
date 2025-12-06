@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../core/models/professional.dart';
-// import 'package:misaludapp_v2/services/doctor/doctor_settings_repository.dart'; // Legacy
-// import '../../models/doctor/doctor_settings.dart'; // Legacy
+import '../../data/repositories/agenda_repository.dart';
 
 class ConfigurarAgendaMedicoPage extends StatefulWidget {
   final Professional doctor;
@@ -15,17 +14,23 @@ class ConfigurarAgendaMedicoPage extends StatefulWidget {
 
 class _ConfigurarAgendaMedicoPageState
     extends State<ConfigurarAgendaMedicoPage> {
+  final AgendaRepository _repo = AgendaRepository();
+
   late TextEditingController _precioPresencialController;
   late TextEditingController _precioVirtualController;
 
   late bool _atiendeUrgencias;
   late bool _atiendeDomicilio;
 
-  late bool _matutino;
-  late bool _vespertino;
-  late bool _nocturno;
-
   late Set<String> _modalidadesSeleccionadas;
+
+  // Nuevas configuraciones
+  List<int> _diasLaborales = [1, 2, 3, 4, 5]; // Lun-Vie
+  int _duracionCita = 30; // Minutos
+  TimeOfDay _horaInicio = const TimeOfDay(hour: 8, minute: 0);
+  TimeOfDay _horaFin = const TimeOfDay(hour: 17, minute: 0);
+
+  bool _loading = true;
 
   @override
   void initState() {
@@ -42,11 +47,34 @@ class _ConfigurarAgendaMedicoPageState
     _atiendeUrgencias = d.acceptsEmergencies;
     _atiendeDomicilio = d.acceptsHomeVisits;
 
-    _matutino = d.schedules.contains("matutino");
-    _vespertino = d.schedules.contains("vespertino");
-    _nocturno = d.schedules.contains("nocturno");
-
     _modalidadesSeleccionadas = d.modalities.toSet();
+
+    _cargarConfiguracionExtra();
+  }
+
+  Future<void> _cargarConfiguracionExtra() async {
+    await _repo.init();
+    final config = await _repo.cargarConfigMedico(widget.doctor.id);
+
+    if (mounted) {
+      setState(() {
+        if (config['diasLaborales'] != null) {
+          _diasLaborales = List<int>.from(config['diasLaborales']);
+        }
+        if (config['duracion'] != null) {
+          _duracionCita = config['duracion'];
+        }
+        if (config['inicio'] != null) {
+          final parts = (config['inicio'] as String).split(':');
+          _horaInicio = TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1]));
+        }
+        if (config['fin'] != null) {
+          final parts = (config['fin'] as String).split(':');
+          _horaFin = TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1]));
+        }
+        _loading = false;
+      });
+    }
   }
 
   @override
@@ -72,32 +100,54 @@ class _ConfigurarAgendaMedicoPageState
       precioVirtual = null;
     }
 
-    final horarios = <String>[];
-    if (_matutino) horarios.add("matutino");
-    if (_vespertino) horarios.add("vespertino");
-    if (_nocturno) horarios.add("nocturno");
-
     final modalidades = _modalidadesSeleccionadas.toList();
 
-    // Guardar logic would go here, updating repository
-    // final settingsRepo = ProfessionalSettingsRepository();
-    // await settingsRepo.guardarSettings(settings);
+    // Guardar configuracion avanzada en repositorio
+    final configMap = {
+      "inicio": "${_horaInicio.hour.toString().padLeft(2, '0')}:${_horaInicio.minute.toString().padLeft(2, '0')}",
+      "fin": "${_horaFin.hour.toString().padLeft(2, '0')}:${_horaFin.minute.toString().padLeft(2, '0')}",
+      "duracion": _duracionCita,
+      "diasLaborales": _diasLaborales,
+    };
 
-    // Crear un Professional actualizado para retornar
+    await _repo.guardarConfigMedico(d.id, configMap);
+
+    // Retornar Professional actualizado (aunque la agenda real depende de repo ahora)
     final actualizado = d.copyWith(
       price: precioPresencial,
       virtualPrice: precioVirtual,
       acceptsEmergencies: _atiendeUrgencias,
       acceptsHomeVisits: _atiendeDomicilio,
-      schedules: horarios,
       modalities: modalidades,
+      // 'schedules' ya no se usa tanto como antes, pero lo mantenemos por compatibilidad si es necesario
     );
 
+    if (!mounted) return;
     Navigator.pop(context, actualizado);
+  }
+
+  Future<void> _seleccionarHora(bool esInicio) async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: esInicio ? _horaInicio : _horaFin,
+    );
+    if (picked != null) {
+      setState(() {
+        if (esInicio) {
+          _horaInicio = picked;
+        } else {
+          _horaFin = picked;
+        }
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_loading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
     final d = widget.doctor;
 
     return Scaffold(
@@ -109,7 +159,7 @@ class _ConfigurarAgendaMedicoPageState
           const SizedBox(height: 20),
           _cardModalidades(),
           const SizedBox(height: 16),
-          _cardHorarios(),
+          _cardConfigAgenda(), // Nuevo card de configuración detallada
           const SizedBox(height: 16),
           _cardPrecios(),
           const SizedBox(height: 16),
@@ -202,25 +252,80 @@ class _ConfigurarAgendaMedicoPageState
     );
   }
 
-  Widget _cardHorarios() {
+  Widget _cardConfigAgenda() {
+    // Map de días para mostrar texto
+    final mapDias = {1: "Lun", 2: "Mar", 3: "Mié", 4: "Jue", 5: "Vie", 6: "Sáb", 7: "Dom"};
+
     return _card(
-      title: "Horarios de atención",
+      title: "Configuración de Horario",
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SwitchListTile(
-            title: const Text("Matutino (08:00 - 12:00)"),
-            value: _matutino,
-            onChanged: (v) => setState(() => _matutino = v),
+          // Días Laborales
+          const Text("Días laborales:", style: TextStyle(fontWeight: FontWeight.w600)),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            children: mapDias.entries.map((entry) {
+              final dia = entry.key;
+              final texto = entry.value;
+              final isSelected = _diasLaborales.contains(dia);
+              return FilterChip(
+                label: Text(texto),
+                selected: isSelected,
+                onSelected: (val) {
+                  setState(() {
+                    if (val) {
+                      _diasLaborales.add(dia);
+                    } else {
+                      _diasLaborales.remove(dia);
+                    }
+                    _diasLaborales.sort();
+                  });
+                },
+              );
+            }).toList(),
           ),
-          SwitchListTile(
-            title: const Text("Vespertino (14:00 - 18:00)"),
-            value: _vespertino,
-            onChanged: (v) => setState(() => _vespertino = v),
+          const SizedBox(height: 16),
+
+          // Hora Inicio y Fin
+          Row(
+            children: [
+              Expanded(
+                child: ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text("Hora Inicio"),
+                  subtitle: Text("${_horaInicio.format(context)}"),
+                  onTap: () => _seleccionarHora(true),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text("Hora Fin"),
+                  subtitle: Text("${_horaFin.format(context)}"),
+                  onTap: () => _seleccionarHora(false),
+                ),
+              ),
+            ],
           ),
-          SwitchListTile(
-            title: const Text("Nocturno (18:00 - 21:00)"),
-            value: _nocturno,
-            onChanged: (v) => setState(() => _nocturno = v),
+          const SizedBox(height: 8),
+
+          // Duración Cita
+          const Text("Duración de la cita:", style: TextStyle(fontWeight: FontWeight.w600)),
+          DropdownButton<int>(
+            value: _duracionCita,
+            isExpanded: true,
+            items: [15, 30, 45, 60, 90, 120].map((min) {
+              return DropdownMenuItem(
+                value: min,
+                child: Text("$min minutos"),
+              );
+            }).toList(),
+            onChanged: (val) {
+              if (val != null) setState(() => _duracionCita = val);
+            },
           ),
         ],
       ),

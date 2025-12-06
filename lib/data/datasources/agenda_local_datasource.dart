@@ -56,16 +56,29 @@ class AgendaLocalDataSource {
   /// ============================================================
   /// CONFIGURACIÓN DEL MÉDICO
   /// ============================================================
-  Future<Map<String, dynamic>> _cargarConfigMedico(String doctorId) async {
+  Future<Map<String, dynamic>> cargarConfigMedico(String doctorId) async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString("$_keyConfigMedico$doctorId");
 
     if (raw == null) {
-      // Config por defecto: 8am-5pm, 30 minutos
-      return {"inicio": "08:00", "fin": "17:00", "duracion": 30};
+      // Config por defecto:
+      // 8am-5pm
+      // 30 minutos
+      // Lunes a Viernes (1-5)
+      return {
+        "inicio": "08:00",
+        "fin": "17:00",
+        "duracion": 30,
+        "diasLaborales": [1, 2, 3, 4, 5] // 1=Mon, 7=Sun
+      };
     }
 
     return jsonDecode(raw);
+  }
+
+  Future<void> guardarConfigMedico(String doctorId, Map<String, dynamic> config) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString("$_keyConfigMedico$doctorId", jsonEncode(config));
   }
 
   /// ============================================================
@@ -75,30 +88,56 @@ class AgendaLocalDataSource {
     required String doctorId,
     required DateTime fecha,
   }) async {
-    final config = await _cargarConfigMedico(doctorId);
+    final config = await cargarConfigMedico(doctorId);
+
+    // 1. Validar si el día es laboral
+    final diasLaborales = (config["diasLaborales"] as List<dynamic>?)
+        ?.map((e) => e as int)
+        .toList() ?? [1, 2, 3, 4, 5];
+
+    // DateTime.weekday returns 1 for Monday and 7 for Sunday.
+    if (!diasLaborales.contains(fecha.weekday)) {
+      return []; // No slots if not a working day
+    }
 
     final inicio = _combinar(fecha, config["inicio"]);
     final fin = _combinar(fecha, config["fin"]);
-    final duracion = Duration(minutes: config["duracion"]);
+    final duracion = Duration(minutes: config["duracion"] ?? 30);
 
     List<AgendaSlot> slots = [];
 
     DateTime cursor = inicio;
 
+    // Asegurarse de que no generamos slots en el pasado si es hoy
+    final now = DateTime.now();
+
     while (cursor.isBefore(fin)) {
       final slotFin = cursor.add(duracion);
 
-      // Verificar si está ocupado
-      final ocupado = _citas.any(
-        (c) =>
-            c.professional.id == doctorId &&
-            cursor.isBefore(c.dateTime.add(c.duration)) &&
-            c.dateTime.isBefore(slotFin) &&
-            c.status != 'cancelada',
-      );
+      // Si el slot termina después de la hora de fin configurada, no lo agregamos
+      if (slotFin.isAfter(fin)) break;
 
-      if (!ocupado) {
-        slots.add(AgendaSlot(inicio: cursor, fin: slotFin));
+      // Filter past slots if today
+      bool isPast = false;
+      if (fecha.year == now.year && fecha.month == now.month && fecha.day == now.day) {
+        if (cursor.isBefore(now)) {
+           isPast = true;
+        }
+      }
+
+      if (!isPast) {
+         // Verificar si está ocupado
+        final ocupado = _citas.any(
+          (c) =>
+              c.professional.id == doctorId &&
+              cursor.isBefore(c.dateTime.add(c.duration)) &&
+              c.dateTime.isBefore(slotFin) &&
+              c.status != 'cancelada',
+        );
+
+        if (!ocupado) {
+          slots.add(AgendaSlot(inicio: cursor, fin: slotFin));
+        }
       }
 
       cursor = cursor.add(duracion);
