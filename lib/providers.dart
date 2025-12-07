@@ -206,13 +206,22 @@ class ProfessionalSearchNotifier extends StateNotifier<ProfessionalSearchState> 
   }
 }
 
-// Provider
+// Search Provider (Advanced)
 final professionalSearchProvider = StateNotifierProvider.family<ProfessionalSearchNotifier, ProfessionalSearchState, ProfessionalFilter?>(
   (ref, initialFilter) {
     final repo = ref.watch(professionalRepositoryProvider);
     return ProfessionalSearchNotifier(repo, initialFilter: initialFilter);
   },
 );
+
+// RESTORED: Simple Professionals List Provider (for backward compatibility and Favorites)
+// Fetches a large page to simulate "get all".
+final professionalsProvider = FutureProvider.family<List<Professional>, ProfessionalFilter>((ref, filter) async {
+  final repository = ref.watch(professionalRepositoryProvider);
+  // Fetch a large page 1 to mimic previous "get all" behavior for existing consumers
+  final result = await repository.getProfessionals(filter: filter, limit: 100);
+  return result.items;
+});
 
 // Single Professional Provider
 final professionalProvider = FutureProvider.family<Professional, String>((ref, id) async {
