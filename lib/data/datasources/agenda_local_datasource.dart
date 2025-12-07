@@ -1,5 +1,7 @@
 import 'dart:convert';
+import 'dart:async';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/material.dart'; // For DateUtils
 
 import '../../models/appointment.dart';
 import '../../core/models/professional.dart';
@@ -31,6 +33,10 @@ class AgendaLocalDataSource {
 
   List<Appointment> _citas = [];
 
+  // Singleton stream controller
+  final _controller = StreamController<List<Appointment>>.broadcast();
+  Stream<List<Appointment>> get citasStream => _controller.stream;
+
   /// ============================================================
   ///   INIT - Carga las citas desde SharedPreferences
   /// ============================================================
@@ -47,6 +53,12 @@ class AgendaLocalDataSource {
         _citas = [];
       }
     }
+    _emitirActualizacion();
+  }
+
+  void _emitirActualizacion() {
+    _citas.sort((a, b) => a.dateTime.compareTo(b.dateTime));
+    _controller.add(List.unmodifiable(_citas));
   }
 
   /// ============================================================
@@ -58,6 +70,7 @@ class AgendaLocalDataSource {
       _keyCitas,
       jsonEncode(_citas.map((e) => e.toJson()).toList()),
     );
+    _emitirActualizacion();
   }
 
   /// ============================================================
@@ -166,7 +179,6 @@ class AgendaLocalDataSource {
         .toList() ?? [1, 2, 3, 4, 5];
 
     // Calcular inicio y fin del mes
-    // Para simplificar, iteramos del día 1 al 31 (o fin de mes real)
     final daysInMonth = DateUtils.getDaysInMonth(month.year, month.month);
 
     Map<DateTime, DayStatus> availability = {};
@@ -181,22 +193,9 @@ class AgendaLocalDataSource {
       }
 
       // 2. Check slots
-      // NOTE: Calling generarSlots for 30 days might be heavy if not optimized,
-      // but for local calc it's fine.
-      // We also skip checking past days if strictly needed, but showing history is okay.
-      // Let's mark past days as unavailable for booking purposes?
-      // User requirement: "Red dot" for fully booked. "Grey" for unavailable/rest.
-      // Past days should probably be grey or just ignored. Let's stick to status logic.
-
       final slots = await generarSlots(doctorId: doctorId, fecha: date);
 
       if (slots.isEmpty) {
-        // Working day but no slots -> FULL (or fully blocked)
-        // If it's a working day but past, generarSlots returns empty if strict time checking is on.
-        // Actually generarSlots filters past hours.
-        // If the whole day is in the past, slots will be empty.
-        // Let's assume for calendar view, we want to see what happened or if it was full.
-        // But for future booking, empty means full.
         availability[date] = DayStatus.full;
       } else {
         availability[date] = DayStatus.available;
@@ -238,7 +237,7 @@ class AgendaLocalDataSource {
     );
 
     _citas.add(cita);
-    await _guardarCitas();
+    await _guardarCitas(); // Emits update
 
     return cita;
   }
@@ -274,7 +273,7 @@ class AgendaLocalDataSource {
 
     _citas[index] = cita.copyWith(status: "cancelada");
 
-    await _guardarCitas();
+    await _guardarCitas(); // Emits update
   }
 
   Future<void> reagendarCita(String id, DateTime nuevaFecha) async {
@@ -288,6 +287,6 @@ class AgendaLocalDataSource {
       status: "confirmada",
     );
 
-    await _guardarCitas();
+    await _guardarCitas(); // Emits update
   }
 }
