@@ -3,6 +3,7 @@ import '../../data/repositories/agenda_repository.dart';
 import '../../data/datasources/agenda_local_datasource.dart';
 import '../../core/models/professional.dart';
 import '../../services/notification_service.dart';
+import '../../widgets/custom_calendar_widget.dart';
 
 class AgendaPacientePage extends StatefulWidget {
   final Professional professional;
@@ -17,13 +18,16 @@ class _AgendaPacientePageState extends State<AgendaPacientePage> {
   final AgendaRepository _repo = AgendaRepository();
   final NotificationService _notificationService = NotificationService();
 
+  DateTime _focusedDate = DateTime.now();
   DateTime? _fechaSeleccionada;
   String? _modalidadSeleccionada;
-  DateTime? _slotSeleccionado; // Inicio del slot seleccionado
+  DateTime? _slotSeleccionado;
 
   bool _isSaving = false;
   bool _isLoadingSlots = false;
+  bool _isLoadingCalendar = false;
   List<AgendaSlot> _slotsDisponibles = [];
+  Map<DateTime, DayStatus> _monthAvailability = {};
   Map<String, dynamic>? _doctorConfig;
 
   @override
@@ -31,6 +35,10 @@ class _AgendaPacientePageState extends State<AgendaPacientePage> {
     super.initState();
     _repo.init();
     _cargarConfiguracion();
+    _cargarDisponibilidadMensual(_focusedDate);
+    // Select today initially
+    _fechaSeleccionada = DateTime(_focusedDate.year, _focusedDate.month, _focusedDate.day);
+    _cargarSlots(_fechaSeleccionada!);
   }
 
   Future<void> _cargarConfiguracion() async {
@@ -42,27 +50,26 @@ class _AgendaPacientePageState extends State<AgendaPacientePage> {
     }
   }
 
-  Future<void> _seleccionarFecha() async {
-    final hoy = DateTime.now();
-
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _fechaSeleccionada ?? hoy,
-      firstDate: hoy,
-      lastDate: hoy.add(const Duration(days: 30)),
-    );
-
-    if (picked != null) {
-      setState(() {
-        _fechaSeleccionada = picked;
-        _slotSeleccionado = null; // Reset slot al cambiar fecha
-        _isLoadingSlots = true;
-      });
-      _cargarSlots(picked);
-    }
+  Future<void> _cargarDisponibilidadMensual(DateTime month) async {
+      setState(() => _isLoadingCalendar = true);
+      final availability = await _repo.getAvailabilityForMonth(
+          doctorId: widget.professional.id,
+          month: month
+      );
+      if (mounted) {
+          setState(() {
+              _monthAvailability = availability;
+              _isLoadingCalendar = false;
+          });
+      }
   }
 
   Future<void> _cargarSlots(DateTime fecha) async {
+    setState(() {
+        _isLoadingSlots = true;
+        _slotSeleccionado = null; // Reset selection
+    });
+
     try {
       final slots = await _repo.generarSlots(
         doctorId: widget.professional.id,
@@ -80,9 +87,7 @@ class _AgendaPacientePageState extends State<AgendaPacientePage> {
           _slotsDisponibles = [];
           _isLoadingSlots = false;
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error cargando horarios: $e")),
-        );
+        // Sencilla feedback si falla
       }
     }
   }
@@ -108,7 +113,6 @@ class _AgendaPacientePageState extends State<AgendaPacientePage> {
         duracion: duracion,
       );
 
-      // Enviar notificaciones (Mock)
       await _notificationService.sendAppointmentConfirmation(cita);
 
       if (!mounted) return;
@@ -116,6 +120,10 @@ class _AgendaPacientePageState extends State<AgendaPacientePage> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Cita agendada con éxito.")),
       );
+
+      // Update availability since we just booked a slot
+      _cargarSlots(_fechaSeleccionada!);
+      _cargarDisponibilidadMensual(_focusedDate);
 
       Navigator.pop(context, true);
     } catch (e) {
@@ -134,12 +142,6 @@ class _AgendaPacientePageState extends State<AgendaPacientePage> {
   @override
   Widget build(BuildContext context) {
     final d = widget.professional;
-
-    final fechaText = _fechaSeleccionada == null
-        ? "Selecciona una fecha"
-        : "${_fechaSeleccionada!.day.toString().padLeft(2, '0')}/"
-              "${_fechaSeleccionada!.month.toString().padLeft(2, '0')}/"
-              "${_fechaSeleccionada!.year}";
 
     return Scaffold(
       appBar: AppBar(title: const Text("Agendar cita")),
@@ -184,41 +186,61 @@ class _AgendaPacientePageState extends State<AgendaPacientePage> {
 
             const SizedBox(height: 24),
 
-            // Fecha
+            // Calendario
             const Text(
-              "Fecha",
+              "Selecciona una fecha",
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
             ),
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.calendar_today, color: Colors.blue),
-              title: Text(fechaText),
-              onTap: _seleccionarFecha,
+            const SizedBox(height: 8),
+            Container(
+                decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey.shade300),
+                    borderRadius: BorderRadius.circular(12)
+                ),
+                padding: const EdgeInsets.all(8),
+                child: CustomCalendarWidget(
+                    initialDate: _fechaSeleccionada ?? DateTime.now(),
+                    availability: _monthAvailability,
+                    isLoading: _isLoadingCalendar,
+                    onDateSelected: (date) {
+                        setState(() => _fechaSeleccionada = date);
+                        _cargarSlots(date);
+                    },
+                    onMonthChanged: (month) {
+                        setState(() => _focusedDate = month);
+                        _cargarDisponibilidadMensual(month);
+                    },
+                ),
             ),
 
             const SizedBox(height: 24),
 
             // Horarios (Grid dinámico)
-            const Text(
-              "Horarios Disponibles",
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+            Row(
+              children: [
+                const Text(
+                  "Horarios Disponibles",
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                ),
+                if (_isLoadingSlots) ...[
+                   const SizedBox(width: 12),
+                   const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+                ]
+              ],
             ),
             const SizedBox(height: 8),
+
             if (_fechaSeleccionada == null)
-              const Text("Por favor selecciona una fecha primero.", style: TextStyle(color: Colors.grey))
-            else if (_isLoadingSlots)
-              const Center(child: Padding(
-                padding: EdgeInsets.all(20.0),
-                child: CircularProgressIndicator(),
-              ))
-            else if (_slotsDisponibles.isEmpty)
+              const Text("Selecciona un día en el calendario.", style: TextStyle(color: Colors.grey))
+            else if (!_isLoadingSlots && _slotsDisponibles.isEmpty)
               Container(
                  padding: const EdgeInsets.all(16),
+                 width: double.infinity,
                  decoration: BoxDecoration(
                    color: Colors.grey[100],
                    borderRadius: BorderRadius.circular(8)
                  ),
-                 child: const Text("No hay horarios disponibles para esta fecha. Intenta otro día."),
+                 child: const Text("No hay horarios disponibles para esta fecha.", textAlign: TextAlign.center),
               )
             else
               _buildSlotsGrid(),
@@ -246,7 +268,7 @@ class _AgendaPacientePageState extends State<AgendaPacientePage> {
                   _isSaving ? "Guardando..." : "Confirmar cita",
                   style: const TextStyle(fontSize: 18),
                 ),
-                onPressed: _isSaving ? null : _confirmarCita,
+                onPressed: (_isSaving || _slotSeleccionado == null) ? null : _confirmarCita,
               ),
             ),
           ],
@@ -261,8 +283,6 @@ class _AgendaPacientePageState extends State<AgendaPacientePage> {
       runSpacing: 12,
       children: _slotsDisponibles.map((slot) {
         final isSelected = _slotSeleccionado == slot.inicio;
-
-        // Formato HH:mm
         final hourStr = "${slot.inicio.hour.toString().padLeft(2, '0')}:${slot.inicio.minute.toString().padLeft(2, '0')}";
 
         return ChoiceChip(

@@ -1,3 +1,4 @@
+import 'dart:async';
 import '../datasources/agenda_local_datasource.dart';
 import '../../models/appointment.dart';
 import '../../core/models/professional.dart';
@@ -5,24 +6,59 @@ import '../../core/models/professional.dart';
 class AgendaRepository {
   final AgendaLocalDataSource _local;
 
+  // Stream controller to broadcast updates
+  final _controller = StreamController<List<Appointment>>.broadcast();
+
   AgendaRepository() : _local = AgendaLocalDataSource();
 
   // 🔹 NUEVO: para usar agendaRepo.init() en main.dart
   Future<void> init() async {
     await _local.init();
+    // Emit initial state
+    _emitirActualizacion();
   }
 
-  /// Agendar una cita
+  void dispose() {
+    _controller.close();
+  }
+
+  Stream<List<Appointment>> get citasStream => _controller.stream;
+
+  Future<void> _emitirActualizacion() async {
+    final citas = await _local.obtenerCitasPaciente();
+    _controller.add(citas);
+  }
+
+  /// Agendar una cita (o invitación)
   Future<Appointment> agendarCita({
     required Professional professional,
     required DateTime fechaHora,
     required Duration duracion,
-  }) {
-    return _local.agendarCita(
+    String status = "confirmada",
+    String? patientId,
+  }) async {
+    final cita = await _local.agendarCita(
+      professional: professional,
+      fechaHora: fechaHora,
+      duracion: duracion,
+      status: status,
+      patientId: patientId,
+    );
+    _emitirActualizacion();
+    return cita;
+  }
+
+  Future<void> bloquearSlot({
+     required Professional professional,
+     required DateTime fechaHora,
+     required Duration duracion,
+  }) async {
+    await _local.bloquearSlot(
       professional: professional,
       fechaHora: fechaHora,
       duracion: duracion,
     );
+    _emitirActualizacion();
   }
 
   /// Citas del paciente
@@ -32,6 +68,7 @@ class AgendaRepository {
 
   Future<void> cancelarCita(String id) async {
     await _local.cancelarCita(id);
+    _emitirActualizacion();
   }
 
   Future<void> reagendarCita({
@@ -39,6 +76,7 @@ class AgendaRepository {
     required DateTime nuevaFecha,
   }) async {
     await _local.reagendarCita(id, nuevaFecha);
+    _emitirActualizacion();
   }
 
   /// Generar slots disponibles
@@ -47,6 +85,14 @@ class AgendaRepository {
     required DateTime fecha,
   }) {
     return _local.generarSlots(doctorId: doctorId, fecha: fecha);
+  }
+
+  /// Obtener disponibilidad mensual
+  Future<Map<DateTime, DayStatus>> getAvailabilityForMonth({
+    required String doctorId,
+    required DateTime month
+  }) {
+    return _local.getAvailabilityForMonth(doctorId: doctorId, month: month);
   }
 
   /// Cargar configuración del médico

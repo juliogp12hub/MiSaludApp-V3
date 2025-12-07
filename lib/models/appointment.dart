@@ -8,8 +8,12 @@ class Appointment {
   final DateTime dateTime;
   final Duration duration;
 
-  /// "confirmada", "cancelada", "completada", etc.
+  /// "confirmada", "cancelada", "completada", "blocked", "pending_invite"
   final String status;
+
+  /// Optional: ID of the patient invited (if status == pending_invite)
+  /// or if it's a real backend, the patientId.
+  final String? patientId;
 
   const Appointment({
     required this.id,
@@ -17,6 +21,7 @@ class Appointment {
     required this.dateTime,
     required this.duration,
     required this.status,
+    this.patientId,
   });
 
   Appointment copyWith({
@@ -25,6 +30,7 @@ class Appointment {
     DateTime? dateTime,
     Duration? duration,
     String? status,
+    String? patientId,
   }) {
     return Appointment(
       id: id ?? this.id,
@@ -32,6 +38,7 @@ class Appointment {
       dateTime: dateTime ?? this.dateTime,
       duration: duration ?? this.duration,
       status: status ?? this.status,
+      patientId: patientId ?? this.patientId,
     );
   }
 
@@ -44,6 +51,7 @@ class Appointment {
       dateTime: DateTime.parse(json['dateTime'] as String),
       duration: Duration(minutes: (json['durationMinutes'] as int?) ?? 30),
       status: (json['status'] as String?) ?? 'confirmada',
+      patientId: json['patientId'] as String?,
     );
   }
 
@@ -54,6 +62,7 @@ class Appointment {
       'dateTime': dateTime.toIso8601String(),
       'durationMinutes': duration.inMinutes,
       'status': status,
+      'patientId': patientId,
     };
   }
 }
