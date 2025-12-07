@@ -6,27 +6,14 @@ import '../../core/models/professional.dart';
 class AgendaRepository {
   final AgendaLocalDataSource _local;
 
-  // Stream controller to broadcast updates
-  final _controller = StreamController<List<Appointment>>.broadcast();
+  // Use the singleton stream from local source
+  Stream<List<Appointment>> get citasStream => _local.citasStream;
 
   AgendaRepository() : _local = AgendaLocalDataSource();
 
   // 🔹 NUEVO: para usar agendaRepo.init() en main.dart
   Future<void> init() async {
     await _local.init();
-    // Emit initial state
-    _emitirActualizacion();
-  }
-
-  void dispose() {
-    _controller.close();
-  }
-
-  Stream<List<Appointment>> get citasStream => _controller.stream;
-
-  Future<void> _emitirActualizacion() async {
-    final citas = await _local.obtenerCitasPaciente();
-    _controller.add(citas);
   }
 
   /// Agendar una cita (o invitación)
@@ -37,15 +24,13 @@ class AgendaRepository {
     String status = "confirmada",
     String? patientId,
   }) async {
-    final cita = await _local.agendarCita(
+    return _local.agendarCita(
       professional: professional,
       fechaHora: fechaHora,
       duracion: duracion,
       status: status,
       patientId: patientId,
     );
-    _emitirActualizacion();
-    return cita;
   }
 
   Future<void> bloquearSlot({
@@ -58,7 +43,6 @@ class AgendaRepository {
       fechaHora: fechaHora,
       duracion: duracion,
     );
-    _emitirActualizacion();
   }
 
   /// Citas del paciente
@@ -68,7 +52,6 @@ class AgendaRepository {
 
   Future<void> cancelarCita(String id) async {
     await _local.cancelarCita(id);
-    _emitirActualizacion();
   }
 
   Future<void> reagendarCita({
@@ -76,7 +59,6 @@ class AgendaRepository {
     required DateTime nuevaFecha,
   }) async {
     await _local.reagendarCita(id, nuevaFecha);
-    _emitirActualizacion();
   }
 
   /// Generar slots disponibles
