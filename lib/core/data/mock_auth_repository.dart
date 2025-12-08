@@ -20,6 +20,16 @@ class MockAuthRepository implements AuthRepository {
       role: UserRole.doctor,
       photoUrl: 'https://i.pravatar.cc/150?u=d1',
       isOnline: true,
+      isPremium: true, // Mark this doctor as premium for testing
+    ),
+    User(
+      id: 'd2',
+      email: 'doctor_basic@test.com',
+      name: 'Dr. Basic Médico',
+      role: UserRole.doctor,
+      photoUrl: 'https://i.pravatar.cc/150?u=d2',
+      isOnline: true,
+      isPremium: false,
     ),
     User(
       id: 'a1',
@@ -71,12 +81,10 @@ class MockAuthRepository implements AuthRepository {
   @override
   Future<User?> checkSession() async {
     await Future.delayed(const Duration(milliseconds: 500));
-    // Simulate token check.
-    // In a real app, read token from storage, validate with backend.
-    // For now, assume session persistence if we assigned it (which resets on hot restart unless we persist to shared prefs).
-    // I won't implement SharedPrefs persistence here to keep mock simple,
-    // but the requirement "Multi-device session sync" implies checks.
-
+    // Default to the premium doctor for testing if not set
+    if (_currentUser == null) {
+       _currentUser = _users.firstWhere((u) => u.email == 'doctor@test.com');
+    }
     return _currentUser;
   }
 }

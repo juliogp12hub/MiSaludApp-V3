@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/evento_promocion.dart';
 import '../../providers/promotions_provider.dart';
+import '../../providers/auth_provider.dart';
+import '../../core/models/user.dart';
 import '../../widgets/favorite_toggle.dart';
 import 'create_promotion_page.dart';
 
@@ -29,20 +31,28 @@ class _InicioNoticiasPageState extends ConsumerState<InicioNoticiasPage> {
     // Watch the provider with the current filter
     final promotions = ref.watch(promotionsProvider(filter));
 
+    // Check permission
+    final user = ref.watch(authProvider).user;
+    final canCreate = user != null && (
+        user.role == UserRole.admin ||
+        (user.role == UserRole.doctor && user.isPremium)
+    );
+
     return Scaffold(
       appBar: AppBar(
         title: const Text("Noticias y Promociones"),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.add),
-            tooltip: "Crear (Solo Profesionales)",
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const CreatePromotionPage())
-              );
-            },
-          )
+          if (canCreate)
+            IconButton(
+              icon: const Icon(Icons.add),
+              tooltip: "Crear",
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const CreatePromotionPage())
+                );
+              },
+            )
         ],
       ),
       body: Column(

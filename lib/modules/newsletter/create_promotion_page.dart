@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/evento_promocion.dart';
 import '../../providers/promotions_provider.dart';
+import '../../providers/auth_provider.dart';
+import '../../core/models/user.dart';
 
 class CreatePromotionPage extends ConsumerStatefulWidget {
   const CreatePromotionPage({super.key});
@@ -20,9 +22,29 @@ class _CreatePromotionPageState extends ConsumerState<CreatePromotionPage> {
 
   final List<String> _categories = ["General", "Dental", "Salud Mental", "Salud Femenina"];
 
+  @override
+  void initState() {
+    super.initState();
+    // Safety check: Redirect if not allowed
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final user = ref.read(authProvider).user;
+      final canCreate = user != null && (
+          user.role == UserRole.admin ||
+          (user.role == UserRole.doctor && user.isPremium)
+      );
+
+      if (!canCreate) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Acceso denegado. Se requiere cuenta Premium.")));
+        Navigator.pop(context);
+      }
+    });
+  }
+
   void _guardar() {
     if (_formKey.currentState!.validate()) {
       _formKey.currentState!.save();
+
+      final user = ref.read(authProvider).user;
 
       final promo = EventoPromocion(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -31,25 +53,13 @@ class _CreatePromotionPageState extends ConsumerState<CreatePromotionPage> {
         tipo: _tipo,
         category: _categoria,
         fecha: DateTime.now().add(const Duration(days: 7)),
-        autorNombre: "Dr. Mock (Tú)", // Mocked Logged In Doctor
-        autorTipo: "doctor",
-        professionalId: "1", // Mocked ID
+        autorNombre: user?.name ?? "Dr. Desconocido",
+        autorTipo: user?.role == UserRole.admin ? "admin" : "doctor",
+        professionalId: user?.id,
       );
 
-      // We use ref.read on the generic provider to add.
-      // Note: Since family providers are distinct, we should ideally have a method in repo exposed.
-      // But here we can read a specific one (e.g. null filter) to get the notifier and add.
-      // The notifier.add calls repo.add which updates the source list.
-      // Then when other providers read, they should fetch fresh data if they re-read.
-      // However, `promotionsProvider` fetches in constructor.
-      // To fix this: `PromotionsNotifier` should probably listen to a stream from Repo or we force refresh.
-      // For this mock, `notifier.add` calls `load()` which updates state for THAT notifier.
-      // If `InicioNoticiasPage` is watching `promotionsProvider(currentFilter)`, it is a DIFFERENT notifier instance if we read `promotionsProvider(null)`.
-      // Solution: The Repo is a singleton Provider. The Notifiers read from it.
-      // We need to invalidate the providers so they re-read from Repo.
-
       ref.read(promotionRepositoryProvider).addPromotion(promo).then((_) {
-         ref.invalidate(promotionsProvider); // Invalidate all families
+         ref.invalidate(promotionsProvider);
          Navigator.pop(context);
          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Promoción creada exitosamente.")));
       });
