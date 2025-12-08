@@ -1,18 +1,30 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'professional_detail_data.dart';
 import '../agenda/agenda_universal_page.dart';
+import '../../widgets/favorite_toggle.dart';
 
-class ProfessionalDetailPage extends StatelessWidget {
+class ProfessionalDetailPage extends ConsumerWidget {
   final ProfessionalDetailData data;
 
   const ProfessionalDetailPage({super.key, required this.data});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
 
     return Scaffold(
-      appBar: AppBar(title: Text(data.nombre)),
+      appBar: AppBar(
+        title: Text(data.nombre),
+        actions: [
+          FavoriteToggle(
+            professionalId: data.id,
+            activeColor: Colors.red,
+            inactiveColor: Colors.white, // Assuming AppBar is colored, or use grey if white
+          ),
+          const SizedBox(width: 8),
+        ],
+      ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [

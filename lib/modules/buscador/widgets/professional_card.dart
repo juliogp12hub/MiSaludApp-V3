@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/models/professional.dart';
+import '../../../../widgets/favorite_toggle.dart';
 
-class ProfessionalCard extends StatelessWidget {
+class ProfessionalCard extends ConsumerWidget {
   final Professional professional;
   final VoidCallback onTap;
 
@@ -12,7 +14,7 @@ class ProfessionalCard extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -22,6 +24,7 @@ class ProfessionalCard extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.all(12),
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               CircleAvatar(
                 radius: 28,
@@ -38,12 +41,24 @@ class ProfessionalCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      professional.name,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            professional.name,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        FavoriteToggle(
+                          professionalId: professional.id,
+                          size: 20,
+                        ),
+                      ],
                     ),
                     Text(professional.specialty, style: const TextStyle(fontSize: 14)),
                     if (professional.address != null)
@@ -93,7 +108,6 @@ class ProfessionalCard extends StatelessWidget {
                   ],
                 ),
               ),
-              const Icon(Icons.chevron_right),
             ],
           ),
         ),

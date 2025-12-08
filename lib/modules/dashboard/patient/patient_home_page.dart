@@ -4,7 +4,7 @@ import '../../../providers/auth_provider.dart';
 import '../../agenda/mis_citas_page.dart';
 import '../../buscador/dashboard_buscar_page.dart';
 import '../../favoritos/favoritos_page.dart';
-// Reusing news component for now
+import '../../../widgets/favorite_toggle.dart';
 
 class PatientHomePage extends ConsumerWidget {
   const PatientHomePage({super.key});
@@ -59,17 +59,31 @@ class PatientHomePage extends ConsumerWidget {
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 12),
-              // Simplified Carousel using a PageView or just a Card for now
               SizedBox(
                 height: 180,
                 child: ListView(
                   scrollDirection: Axis.horizontal,
                   children: [
-                    _PromoCard(color: Colors.blue.shade100, title: "Chequeo General", subtitle: "20% de descuento"),
+                    _PromoCard(
+                        id: "promo_1",
+                        color: Colors.blue.shade100,
+                        title: "Chequeo General",
+                        subtitle: "20% de descuento"
+                    ),
                     const SizedBox(width: 12),
-                    _PromoCard(color: Colors.green.shade100, title: "Salud Mental", subtitle: "Primera sesión gratis"),
+                    _PromoCard(
+                        id: "promo_2",
+                        color: Colors.green.shade100,
+                        title: "Salud Mental",
+                        subtitle: "Primera sesión gratis"
+                    ),
                     const SizedBox(width: 12),
-                    _PromoCard(color: Colors.orange.shade100, title: "Dental", subtitle: "Limpieza profunda"),
+                    _PromoCard(
+                        id: "promo_3",
+                        color: Colors.orange.shade100,
+                        title: "Dental",
+                        subtitle: "Limpieza profunda"
+                    ),
                   ],
                 ),
               ),
@@ -104,12 +118,12 @@ class PatientHomePage extends ConsumerWidget {
                     iconColor: Colors.blue,
                     onTap: () => _navigate(context, const MisCitasPage()),
                   ),
-                  _ActionCard( // Redundant with MisCitas but requested "Agenda"
+                  _ActionCard(
                     icon: Icons.book_online,
                     title: "Agenda",
                     color: Colors.orange.shade50,
                     iconColor: Colors.orange,
-                    onTap: () => _navigate(context, const MisCitasPage()), // Mapping to MisCitas for now
+                    onTap: () => _navigate(context, const MisCitasPage()),
                   ),
                   _ActionCard(
                     icon: Icons.favorite,
@@ -138,8 +152,6 @@ class PatientHomePage extends ConsumerWidget {
                 ],
               ),
               const SizedBox(height: 8),
-              // Horizontal List of Appointments (Mock for now, or fetch from provider)
-              // Ideally use AppointmentProvider here.
               SizedBox(
                 height: 140,
                 child: ListView(
@@ -173,11 +185,17 @@ class PatientHomePage extends ConsumerWidget {
 }
 
 class _PromoCard extends StatelessWidget {
+  final String id;
   final Color color;
   final String title;
   final String subtitle;
 
-  const _PromoCard({required this.color, required this.title, required this.subtitle});
+  const _PromoCard({
+      required this.id,
+      required this.color,
+      required this.title,
+      required this.subtitle
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -188,18 +206,31 @@ class _PromoCard extends StatelessWidget {
         color: color,
         borderRadius: BorderRadius.circular(16),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.center,
+      child: Stack(
         children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8)),
-            child: const Text("PROMO", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10)),
-          ),
-          const SizedBox(height: 12),
-          Text(title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-          Text(subtitle, style: TextStyle(fontSize: 14, color: Colors.black.withOpacity(0.6))),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8)),
+                  child: const Text("PROMO", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10)),
+                ),
+                const SizedBox(height: 12),
+                Text(title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                Text(subtitle, style: TextStyle(fontSize: 14, color: Colors.black.withOpacity(0.6))),
+              ],
+            ),
+            Positioned(
+                top: 0,
+                right: 0,
+                child: FavoriteToggle(
+                    professionalId: id, // Using promo ID here
+                    activeColor: Colors.red,
+                    inactiveColor: Colors.black26,
+                )
+            )
         ],
       ),
     );
