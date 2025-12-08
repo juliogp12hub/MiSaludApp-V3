@@ -13,6 +13,7 @@ class User {
 
   // Doctor specific fields
   final bool? isOnline;
+  final bool isPremium;
 
   User({
     required this.id,
@@ -21,6 +22,7 @@ class User {
     required this.role,
     this.photoUrl,
     this.isOnline,
+    this.isPremium = false,
   });
 
   // Manual serialization since we can't run build_runner easily
@@ -35,6 +37,7 @@ class User {
       ),
       photoUrl: json['photoUrl'] as String?,
       isOnline: json['isOnline'] as bool?,
+      isPremium: json['isPremium'] as bool? ?? false,
     );
   }
 
@@ -46,6 +49,7 @@ class User {
       'role': role.toString().split('.').last,
       'photoUrl': photoUrl,
       'isOnline': isOnline,
+      'isPremium': isPremium,
     };
   }
 }

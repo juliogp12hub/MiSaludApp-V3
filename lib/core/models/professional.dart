@@ -32,6 +32,9 @@ class Professional {
   final List<String> schedules; // horarios (matutino, vespertino...)
   final List<String> modalities; // presencial, virtual
 
+  // Premium Status
+  final bool isPremium;
+
   Professional({
     required this.id,
     required this.name,
@@ -53,6 +56,7 @@ class Professional {
     this.virtualPrice,
     this.schedules = const [],
     this.modalities = const [],
+    this.isPremium = false,
   });
 
   factory Professional.fromJson(Map<String, dynamic> json) {
@@ -80,6 +84,7 @@ class Professional {
       virtualPrice: (json['virtualPrice'] as num?)?.toDouble(),
       schedules: (json['schedules'] as List<dynamic>?)?.map((e) => e as String).toList() ?? [],
       modalities: (json['modalidades'] as List<dynamic>?)?.map((e) => e as String).toList() ?? [],
+      isPremium: json['isPremium'] as bool? ?? false,
     );
   }
 
@@ -105,6 +110,7 @@ class Professional {
       'virtualPrice': virtualPrice,
       'schedules': schedules,
       'modalities': modalities,
+      'isPremium': isPremium,
     };
   }
 
@@ -129,6 +135,7 @@ class Professional {
     double? virtualPrice,
     List<String>? schedules,
     List<String>? modalities,
+    bool? isPremium,
   }) {
     return Professional(
       id: id ?? this.id,
@@ -151,6 +158,7 @@ class Professional {
       virtualPrice: virtualPrice ?? this.virtualPrice,
       schedules: schedules ?? this.schedules,
       modalities: modalities ?? this.modalities,
+      isPremium: isPremium ?? this.isPremium,
     );
   }
 }
