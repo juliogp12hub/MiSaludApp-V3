@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../providers/auth_provider.dart';
+import '../../../panel_medico/configurar_agenda_medico_page.dart';
+import '../../../core/models/professional.dart';
+import '../../newsletter/create_promotion_page.dart';
 
 class DoctorHomePage extends ConsumerWidget {
   const DoctorHomePage({super.key});
@@ -8,6 +11,17 @@ class DoctorHomePage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(authProvider).user;
+
+    // Construct mock professional
+    final professionalMock = Professional(
+      id: user?.id ?? "d1",
+      name: user?.name ?? "Doctor",
+      specialty: "General",
+      city: "Guatemala",
+      rating: 5.0,
+      price: 200,
+      isPremium: user?.isPremium ?? false,
+    );
 
     return Scaffold(
       body: SafeArea(
@@ -48,15 +62,6 @@ class DoctorHomePage extends ConsumerWidget {
                       ],
                     ),
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.edit),
-                    onPressed: () {
-                      // Navigate to Edit Profile
-                      // We need to pass a Professional object. Ideally we fetch it or construct it from User.
-                      // For now, mock navigation or placeholder.
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Editar perfil en desarrollo")));
-                    },
-                  ),
                 ],
               ),
 
@@ -76,26 +81,45 @@ class DoctorHomePage extends ConsumerWidget {
               const SizedBox(height: 24),
 
               // 3.2.2 Acciones principales
-              const Text("Gestión", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const Text("Accesos Rápidos", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               const SizedBox(height: 12),
-              ListTile(
-                tileColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                leading: const Icon(Icons.calendar_today, color: Colors.teal),
-                title: const Text("Agenda de Hoy"),
-                subtitle: const Text("Ver pacientes programados"),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () {},
-              ),
-              const SizedBox(height: 8),
-              ListTile(
-                tileColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                leading: const Icon(Icons.notifications_active, color: Colors.orange),
-                title: const Text("Citas Pendientes"),
-                subtitle: const Text("3 solicitudes de cita"),
-                trailing: const CircleAvatar(radius: 12, backgroundColor: Colors.red, child: Text("3", style: TextStyle(color: Colors.white, fontSize: 12))),
-                onTap: () {},
+
+              Row(
+                children: [
+                  Expanded(
+                    child: _QuickActionCard(
+                      icon: Icons.edit_calendar,
+                      color: Colors.blue,
+                      title: "Configurar\nAgenda",
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => ConfigurarAgendaMedicoPage(doctor: professionalMock),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _QuickActionCard(
+                      icon: Icons.campaign,
+                      color: Colors.purple,
+                      title: "Crear\nNoticia",
+                      onTap: () {
+                        if (user?.isPremium == true) {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const CreatePromotionPage()),
+                          );
+                        } else {
+                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Función exclusiva para Premium")));
+                        }
+                      },
+                    ),
+                  ),
+                ],
               ),
 
               const SizedBox(height: 24),
@@ -157,6 +181,40 @@ class _StatCard extends StatelessWidget {
           const SizedBox(height: 4),
           Text(title, style: const TextStyle(fontSize: 12, color: Colors.grey)),
         ],
+      ),
+    );
+  }
+}
+
+class _QuickActionCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _QuickActionCard({required this.icon, required this.title, required this.color, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        height: 100,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withOpacity(0.3)),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: color, size: 30),
+            const SizedBox(height: 8),
+            Text(title, textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.bold, color: color, fontSize: 13)),
+          ],
+        ),
       ),
     );
   }
