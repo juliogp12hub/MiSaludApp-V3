@@ -11,7 +11,7 @@ class NotificationsPage extends StatelessWidget {
         "title": "Cita Confirmada",
         "body": "Tu cita con Dr. Roberto Médico ha sido confirmada.",
         "time": "Hace 2 horas",
-        "icon": Icons.calendar_check,
+        "icon": Icons.event_available,
         "color": Colors.green,
       },
       {

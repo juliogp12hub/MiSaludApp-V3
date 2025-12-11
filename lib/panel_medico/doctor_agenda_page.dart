@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import '../../data/repositories/agenda_repository.dart';
-import '../../data/datasources/agenda_local_datasource.dart';
-import '../../core/models/professional.dart';
-import '../../services/notification_service.dart';
-import '../../widgets/custom_calendar_widget.dart';
+import '../data/repositories/agenda_repository.dart';
+import '../data/datasources/agenda_local_datasource.dart';
+import '../core/models/professional.dart';
+import '../services/notification_service.dart';
+import '../widgets/custom_calendar_widget.dart';
 
 class DoctorAgendaPage extends StatefulWidget {
   final Professional professional;
