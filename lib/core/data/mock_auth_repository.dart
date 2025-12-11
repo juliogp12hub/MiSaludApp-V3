@@ -20,7 +20,7 @@ class MockAuthRepository implements AuthRepository {
       role: UserRole.doctor,
       photoUrl: 'https://i.pravatar.cc/150?u=d1',
       isOnline: true,
-      isPremium: true, // Mark this doctor as premium for testing
+      isPremium: true,
     ),
     User(
       id: 'd2',
@@ -51,7 +51,6 @@ class MockAuthRepository implements AuthRepository {
       try {
         final user = _users.firstWhere((u) => u.email.toLowerCase() == email.toLowerCase());
         _currentUser = user;
-        // Here we would store token in secure storage
         return user;
       } catch (e) {
         throw NotFoundError(message: 'Usuario no encontrado');
@@ -65,26 +64,50 @@ class MockAuthRepository implements AuthRepository {
   Future<void> logout() async {
     await Future.delayed(const Duration(milliseconds: 200));
     _currentUser = null;
-    // Clear token
   }
 
   @override
   Future<void> resetPassword(String email) async {
     await Future.delayed(const Duration(seconds: 1));
-    // Check if email exists
     if (!_users.any((u) => u.email.toLowerCase() == email.toLowerCase())) {
        throw NotFoundError(message: 'Correo no registrado');
     }
-    // Simulate sending email
   }
 
   @override
   Future<User?> checkSession() async {
     await Future.delayed(const Duration(milliseconds: 500));
-    // Default to the premium doctor for testing if not set
-    if (_currentUser == null) {
-       _currentUser = _users.firstWhere((u) => u.email == 'doctor@test.com');
-    }
     return _currentUser;
+  }
+
+  @override
+  Future<User> updateProfilePhoto(String userId, String path) async {
+    await Future.delayed(const Duration(milliseconds: 500));
+    final index = _users.indexWhere((u) => u.id == userId);
+    if (index != -1) {
+      final updated = _users[index].copyWith(photoUrl: path);
+      _users[index] = updated;
+      if (_currentUser?.id == userId) {
+        _currentUser = updated;
+      }
+      return updated;
+    }
+    throw NotFoundError(message: 'User not found');
+  }
+
+  @override
+  Future<void> changePassword(String userId, String oldPassword, String newPassword) async {
+    await Future.delayed(const Duration(milliseconds: 500));
+    // Mock logic
+    if (oldPassword != '123456') {
+      throw AppError('Contraseña actual incorrecta');
+    }
+  }
+
+  @override
+  Future<void> updateNotificationPreferences(String userId, Map<String, bool> prefs) async {
+    await Future.delayed(const Duration(milliseconds: 300));
+    // Log prefs
+    // print("Prefs updated for $userId: $prefs");
   }
 }

@@ -25,7 +25,6 @@ class User {
     this.isPremium = false,
   });
 
-  // Manual serialization since we can't run build_runner easily
   factory User.fromJson(Map<String, dynamic> json) {
     return User(
       id: json['id'] as String,
@@ -51,5 +50,25 @@ class User {
       'isOnline': isOnline,
       'isPremium': isPremium,
     };
+  }
+
+  User copyWith({
+    String? id,
+    String? email,
+    String? name,
+    String? photoUrl,
+    UserRole? role,
+    bool? isOnline,
+    bool? isPremium,
+  }) {
+    return User(
+      id: id ?? this.id,
+      email: email ?? this.email,
+      name: name ?? this.name,
+      role: role ?? this.role,
+      photoUrl: photoUrl ?? this.photoUrl,
+      isOnline: isOnline ?? this.isOnline,
+      isPremium: isPremium ?? this.isPremium,
+    );
   }
 }

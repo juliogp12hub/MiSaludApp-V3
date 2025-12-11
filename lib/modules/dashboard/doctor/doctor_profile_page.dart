@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../panel_medico/configurar_agenda_medico_page.dart';
 import '../../../core/models/professional.dart';
+import '../../perfil/account_settings_page.dart';
 
 class DoctorProfilePage extends ConsumerWidget {
   const DoctorProfilePage({super.key});
@@ -12,11 +13,10 @@ class DoctorProfilePage extends ConsumerWidget {
     final user = ref.watch(authProvider).user;
 
     // Construct a Mock Professional object from User for the config page
-    // In a real app, we would fetch the full Professional profile.
     final professionalMock = Professional(
       id: user?.id ?? "d1",
       name: user?.name ?? "Doctor",
-      specialty: "General", // Placeholder
+      specialty: "General",
       city: "Guatemala",
       rating: 5.0,
       price: 200,
@@ -65,10 +65,11 @@ class DoctorProfilePage extends ConsumerWidget {
 
           // Menu
           _ProfileMenuItem(
-            icon: Icons.edit,
-            text: "Editar Perfil",
+            icon: Icons.manage_accounts,
+            text: "Configuración de Cuenta",
+            subtitle: "Foto, Contraseña, Notificaciones",
             onTap: () {
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Editar perfil en desarrollo")));
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const AccountSettingsPage()));
             },
           ),
 
@@ -84,12 +85,6 @@ class DoctorProfilePage extends ConsumerWidget {
                 ),
               );
             },
-          ),
-
-          _ProfileMenuItem(
-            icon: Icons.notifications,
-            text: "Notificaciones",
-            onTap: () {},
           ),
 
           const Divider(),
